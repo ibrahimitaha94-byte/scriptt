@@ -37,7 +37,7 @@ app.get('/export/result', function(req, res) {
 
 async function runExportInBackground(token) {
   try {
-    var url = 'https://graph.facebook.com/v18.0/me/conversations?platform=messenger&limit=100&access_token=' + token;
+    var url = 'https://graph.facebook.com/v18.0/me/conversations?platform=messenger&limit=100&access_token=' + encodeURIComponent(token);
     var pageCount = 0;
 
     while (url && pageCount < 50) {
@@ -47,7 +47,7 @@ async function runExportInBackground(token) {
       for (var i = 0; i < convos.length; i++) {
         try {
           var msgUrl = 'https://graph.facebook.com/v18.0/' + convos[i].id +
-            '?fields=messages.limit(20){message,from,created_time}&access_token=' + token;
+            '?fields=messages.limit(20){message,from,created_time}&access_token=' + encodeURIComponent(token);
           var msgResp = await axios.get(msgUrl);
 
           exportState.results.push({
