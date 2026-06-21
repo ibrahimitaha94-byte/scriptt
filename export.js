@@ -35,27 +35,38 @@ app.get('/export/result', function(req, res) {
   res.json({ total: exportState.results.length, conversations: exportState.results });
 });
 
+async function fetchOneConversation(convoId, token) {
+  try {
+    var msgUrl = 'https://graph.facebook.com/v18.0/' + convoId +
+      '?fields=messages.limit(20){message,from,created_time}&access_token=' + encodeURIComponent(token);
+    var msgResp = await axios.get(msgUrl);
+    return {
+      conversationId: convoId,
+      messages: (msgResp.data.messages && msgResp.data.messages.data) || []
+    };
+  } catch (e) {
+    console.error('[Export] Erreur conversation', convoId, e.message);
+    return null;
+  }
+}
+
 async function runExportInBackground(token) {
   try {
     var url = 'https://graph.facebook.com/v18.0/me/conversations?platform=messenger&limit=100&access_token=' + encodeURIComponent(token);
     var pageCount = 0;
+    var BATCH_SIZE = 15;
 
     while (url && pageCount < 50) {
       var resp = await axios.get(url);
       var convos = resp.data.data || [];
 
-      for (var i = 0; i < convos.length; i++) {
-        try {
-          var msgUrl = 'https://graph.facebook.com/v18.0/' + convos[i].id +
-            '?fields=messages.limit(20){message,from,created_time}&access_token=' + encodeURIComponent(token);
-          var msgResp = await axios.get(msgUrl);
-
-          exportState.results.push({
-            conversationId: convos[i].id,
-            messages: (msgResp.data.messages && msgResp.data.messages.data) || []
-          });
-        } catch (e) {
-          console.error('[Export] Erreur conversation', convos[i].id, e.message);
+      for (var i = 0; i < convos.length; i += BATCH_SIZE) {
+        var batch = convos.slice(i, i + BATCH_SIZE);
+        var batchResults = await Promise.all(
+          batch.map(function(c) { return fetchOneConversation(c.id, token); })
+        );
+        for (var j = 0; j < batchResults.length; j++) {
+          if (batchResults[j]) exportState.results.push(batchResults[j]);
         }
         exportState.progress = exportState.results.length;
       }
